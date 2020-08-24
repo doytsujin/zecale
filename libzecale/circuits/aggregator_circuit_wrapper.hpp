@@ -7,6 +7,7 @@
 
 #include "libzecale/circuits/aggregator_gadget.hpp"
 #include "libzecale/circuits/pairing/pairing_params.hpp"
+#include "libzecale/circuits/verification_key_hash_gadget.hpp"
 
 #include <libzeth/core/extended_proof.hpp>
 
@@ -15,7 +16,26 @@ using namespace libzeth;
 namespace libzecale
 {
 
-template<typename wppT, typename wsnarkT, typename nverifierT, size_t NumProofs>
+/// Creates a circuit for creating a wrapping proof aggregating a batch of
+/// nested proofs. Inputs are allocated as follows:
+///
+///   [hash of nested verification key]
+///
+///   [proof 1, input 1] ... [proof 1, input M]
+///   [proof 1 result (0 or 1)]
+///
+///   ...
+///
+///   [proof N, input 1] ... [proof N, input M]
+///   [proof N result (0 or 1)]
+///
+/// (where N = NumProofs, M = num_inputs_per_nested_proof)
+template<
+    typename wppT,
+    typename wsnarkT,
+    typename nverifierT,
+    typename hashT,
+    size_t NumProofs>
 class aggregator_circuit_wrapper
 {
 private:
@@ -28,6 +48,11 @@ private:
     const size_t _num_inputs_per_nested_proof;
 
     libsnark::protoboard<libff::Fr<wppT>> _pb;
+
+    /// (Primary) Variable holding the hash of the verification key for nested
+    /// proofs. Verified against the actual verification key values, by the
+    /// _nested_vk_hash_gadget.
+    libsnark::pb_variable<libff::Fr<wppT>> _nested_vk_hash;
 
     /// (Primary) The nested primary inputs lie in the scalar field
     /// `libff::Fr<nppT>`, and must be represented as elements of
@@ -54,6 +79,11 @@ private:
     std::array<std::shared_ptr<proof_variable_gadget>, NumProofs>
         _nested_proofs;
 
+    /// Gadget to check the hash of the nested verification key.
+    std::shared_ptr<verification_key_hash_gadget<wppT, nverifierT, hashT>>
+        _nested_vk_hash_gadget;
+
+    /// Gadget to aggregate proofs.
     std::shared_ptr<aggregator_gadget<wppT, nverifierT, NumProofs>>
         _aggregator_gadget;
 
